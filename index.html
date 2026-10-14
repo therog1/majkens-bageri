@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="sv"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Majkens Bageri</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;font-family:"Trebuchet MS",Verdana,sans-serif;background:linear-gradient(#ffe3ec,#fff4d6);color:#5a3a2e;overflow-x:hidden}
+#app{max-width:980px;margin:0 auto;padding:8px;min-height:100%;display:flex;flex-direction:column;gap:8px}
+header{display:flex;justify-content:space-between;align-items:center;background:#fff8;border-radius:16px;padding:6px 12px;font-weight:bold}
+header .stat{font-size:1.05em}
+.btn{border:none;border-radius:14px;padding:12px 16px;font-size:1.05em;font-weight:bold;cursor:pointer;background:#ff8fb1;color:#fff;box-shadow:0 4px 0 #d9668a;min-height:48px;touch-action:manipulation}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #d9668a}
+.btn.sec{background:#8fc9ff;box-shadow:0 4px 0 #5d9bd6}
+.btn.ok{background:#6fd18a;box-shadow:0 4px 0 #44a660}
+.btn:disabled{background:#ccc;box-shadow:0 4px 0 #aaa;cursor:default}
+#scene{position:relative;width:100%;aspect-ratio:16/8;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 4px 12px #0002}
+canvas{width:100%;height:100%;display:block}
+#bubble{position:absolute;right:4%;top:6%;max-width:46%;background:#fff;border:3px solid #5a3a2e;border-radius:18px;padding:8px 12px;font-size:clamp(13px,2.6vw,18px);display:none}
+#panel{background:#fff9;border-radius:18px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.row b{min-width:80px}
+.opt{flex:1 1 90px;background:#fff;border:3px solid #f3c1d0;border-radius:14px;padding:10px 6px;font-size:1em;cursor:pointer;min-height:48px;color:#5a3a2e;font-weight:bold}
+.opt.sel{border-color:#ff5d8f;background:#ffe0ea}
+.opt:disabled{opacity:.4}
+#bar{position:relative;height:40px;border-radius:12px;overflow:hidden;background:linear-gradient(90deg,#ffe9a8 0 var(--a),#8be09b var(--a) var(--b),#7a4a2a var(--b))}
+#needle{position:absolute;top:0;bottom:0;width:6px;background:#333;left:0}
+.overlay{position:fixed;inset:0;background:#0006;display:flex;align-items:center;justify-content:center;z-index:9;padding:12px}
+.card{background:#fffaf2;border-radius:22px;padding:18px;max-width:520px;width:100%;max-height:90vh;overflow:auto;text-align:center}
+.card h1{color:#ff5d8f;margin:.2em 0}
+.card ul{text-align:left}
+.shopitem{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px;border-bottom:1px dashed #e9c}
+#toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:#5a3a2e;color:#fff;padding:10px 16px;border-radius:14px;opacity:0;transition:.3s;z-index:10;pointer-events:none;font-weight:bold}
+.hidden{display:none!important}
+</style></head><body>
+<div id="app">
+<header><span class="stat">💰 <span id="money">0</span> kr</span><span class="stat">⭐ Dag <span id="day">1</span> · <span id="served">0</span> sålda</span>
+<span><button class="btn sec" id="shopBtn" style="padding:6px 10px;min-height:40px">🛒 Butik</button> <button class="btn sec" id="muteBtn" style="padding:6px 10px;min-height:40px">🔊</button></span></header>
+<div id="scene"><canvas id="cv" width="960" height="480"></canvas><div id="bubble"></div></div>
+<div id="panel">
+<div class="row"><b>Deg:</b><span id="dough" class="row" style="flex:1"></span></div>
+<div class="row"><b>Fyllning:</b><span id="filling" class="row" style="flex:1"></span></div>
+<div class="row"><b>Topping:</b><span id="topping" class="row" style="flex:1"></span></div>
+<div class="row"><b>Ugn:</b><div id="bar" style="flex:1"><div id="needle"></div></div></div>
+<div class="row"><button class="btn" id="bakBtn" style="flex:1">🔥 Starta ugnen</button><button class="btn ok" id="sellBtn" style="flex:1" disabled>💝 Sälj</button></div>
+</div></div>
+<div class="overlay" id="start"><div class="card"><h1>🧁 Majkens Bageri</h1>
+<p>Hjälp Majken att driva det mysigaste bageriet i stan!</p>
+<ul><li>Kunderna visar sin beställning i en pratbubbla.</li><li>Välj rätt <b>deg</b>, <b>fyllning</b> och <b>topping</b>.</li><li>Tryck <b>Starta ugnen</b> och sen <b>Ta ut!</b> när visaren är i det <span style="color:#3a3">gröna</span> fältet. Gult = för rått, brunt = bränt.</li><li>Tryck <b>Sälj</b>. Rätt och snabbt ger dricks!</li><li>Köp nya recept och uppgraderingar i <b>Butiken</b>. Allt sparas automatiskt.</li></ul>
+<button class="btn" id="playBtn">▶ Börja baka!</button> <button class="btn sec" id="resetBtn">Börja om</button></div></div>
+<div class="overlay hidden" id="shop"><div class="card"><h2>🛒 Butiken</h2><div id="shopList"></div><br><button class="btn" id="closeShop">Stäng</button></div></div>
+<div id="toast"></div>
+<script>
+const $=id=>document.getElementById(id);
+const DOUGH=[{id:'smor',n:'Smördeg',c:'#f6d58e',p:0},{id:'kanel',n:'Kanelbullsdeg',c:'#e0a96d',p:0},{id:'choklad',n:'Chokladdeg',c:'#7b4a2e',p:60},{id:'mandel',n:'Mandeldeg',c:'#f1e2c0',p:120}];
+const FILL=[{id:'vanilj',n:'Vaniljkräm',c:'#fff1a8',p:0},{id:'jordgubb',n:'Jordgubbssylt',c:'#e8344e',p:0},{id:'blabar',n:'Blåbär',c:'#4b4fb8',p:80},{id:'nutella',n:'Nougat',c:'#6b3b1f',p:150}];
+const TOP={list:[{id:'socker',n:'Pärlsocker',c:'#ffffff',p:0},{id:'strossel',n:'Strössel',c:'#ff7ac2',p:0},{id:'grädde',n:'Grädde',c:'#fffaf0',p:90},{id:'marsipan',n:'Marsipan',c:'#9fe07a',p:180}]}.list;
+const UPG=[{id:'ugn',n:'Snabbare ugn 🔥',d:'Ugnen bakar snabbare och gröna fältet blir större',max:3,cost:l=>100+l*120},
+{id:'tal',n:'Mysig musik 🎶',d:'Kunderna har mer tålamod',max:3,cost:l=>80+l*100},
+{id:'dekor',n:'Fin dekor 🌸',d:'Blommor, lampor och mer dricks',max:3,cost:l=>120+l*150}];
+const KEY='majkensBageri_v1';
+let S={money:0,day:1,served:0,unlocked:['smor','kanel','vanilj','jordgubb','socker','strossel'],upg:{ugn:0,tal:0,dekor:0},muted:false};
+try{const s=JSON.parse(localStorage.getItem(KEY));if(s)S=Object.assign(S,s)}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+let sel={d:null,f:null,t:null},order=null,cust=null,bake={state:'idle',pos:0,result:null},patience=1,orderTime=0,t0=performance.now();
+// Audio
+let AC=null;function beep(f,d=.12,type='sine',v=.15){if(S.muted)return;try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(v,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+d)}catch(e){}}
+const jingle=()=>[523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,.15,'triangle'),i*90));
+function toast(t){const e=$('toast');e.textContent=t;e.style.opacity=1;clearTimeout(toast.h);toast.h=setTimeout(()=>e.style.opacity=0,1800)}
+const avail=a=>a.filter(x=>S.unlocked.includes(x.id));
+function renderOpts(){[['dough',DOUGH,'d'],['filling',FILL,'f'],['topping',TOP,'t']].forEach(([el,list,k])=>{const c=$(el);c.innerHTML='';avail(list).forEach(x=>{const b=document.createElement('button');b.className='opt'+(sel[k]===x.id?' sel':'');b.textContent=x.n;b.disabled=bake.state!=='idle';b.onclick=()=>{sel[k]=x.id;beep(660,.06);renderOpts()};c.appendChild(b)})})}
+const find=(l,id)=>l.find(x=>x.id===id);
+const NAMES=['Elsa','Omar','Farmor Greta','Leo','Saga','Ali','Moa','Viktor','Nora','Hugo'];
+function newCustomer(){const r=a=>a[Math.random()*a.length|0];order={d:r(avail(DOUGH)).id,f:r(avail(FILL)).id,t:r(avail(TOP)).id};
+cust={name:r(NAMES),skin:r(['#f7d2b5','#e3a77c','#a86b45','#ffd9c0']),hair:r(['#3a2a20','#d9a441','#a33','#222','#eee']),shirt:r(['#7cc6ff','#ffb347','#b39dff','#77dd77']),x:1.2};
+patience=1;orderTime=performance.now();sel={d:null,f:null,t:null};bake={state:'idle',pos:0,result:null};
+const bb=$('bubble');bb.style.display='block';bb.innerHTML=`<b>${cust.name}:</b> Hej Majken! Jag vill ha <b>${find(DOUGH,order.d).n}</b> med <b>${find(FILL,order.f).n}</b> och <b>${find(TOP,order.t).n}</b>, tack! 😊`;
+beep(880,.1,'triangle');renderOpts();updBtns()}
+function win(){const u=S.upg.ugn;const a=40-u*3,b=62+u*3;return[a,b]}
+function updBtns(){$('bakBtn').textContent=bake.state==='baking'?'✋ Ta ut!':'🔥 Starta ugnen';$('bakBtn').disabled=bake.state==='done'||!(sel.d&&sel.f&&sel.t);$('sellBtn').disabled=bake.state!=='done';const[a,b]=win();$('bar').style.setProperty('--a',a+'%');$('bar').style.setProperty('--b',b+'%');
+$('money').textContent=S.money;$('day').textContent=S.day;$('served').textContent=S.served;$('muteBtn').textContent=S.muted?'🔇':'🔊'}
+$('bakBtn').onclick=()=>{if(bake.state==='idle'){bake.state='baking';bake.pos=0;beep(300,.2,'sawtooth',.05)}else if(bake.state==='baking'){const[a,b]=win();bake.result=bake.pos<a?'rå':bake.pos>b?'bränd':'perfekt';bake.state='done';beep(bake.result==='perfekt'?990:220,.2,'triangle');toast(bake.result==='perfekt'?'Perfekt gräddad! ✨':bake.result==='rå'?'Lite för rå...':'Oj, bränd! 🔥')}renderOpts();updBtns()};
+$('sellBtn').onclick=()=>{let correct=(sel.d===order.d)+(sel.f===order.f)+(sel.t===order.t);let base=20+avail(DOUGH).length*2;let pay=Math.round(base*correct/3);if(bake.result==='perfekt')pay+=8;else pay=Math.round(pay*.5);
+let tip=0;if(correct===3&&bake.result==='perfekt'){tip=Math.round(5+patience*15)+S.upg.dekor*5}
+if(patience<=0)pay=Math.round(pay*.5),tip=0;S.money+=pay+tip;S.served++;if(S.served%8===0){S.day++;toast('Ny dag! Dag '+S.day+' 🌞')}
+const msg=correct===3?(tip?`Mums! ${pay} kr + ${tip} kr dricks 💖`:`Tack! ${pay} kr`):`Hmm, inte riktigt... ${pay} kr`;toast(msg);if(tip)jingle();else beep(440,.15);
+save();$('bubble').style.display='none';cust.leaving=true;setTimeout(newCustomer,900);updBtns()};
+// shop
+function renderShop(){const L=$('shopList');L.innerHTML='<h3>Nya recept</h3>';[...DOUGH,...FILL,...TOP].filter(x=>x.p>0).forEach(x=>{const own=S.unlocked.includes(x.id);const d=document.createElement('div');d.className='shopitem';d.innerHTML=`<span>${x.n}</span>`;const b=document.createElement('button');b.className='btn ok';b.textContent=own?'✔ Klar':x.p+' kr';b.disabled=own||S.money<x.p;b.onclick=()=>{S.money-=x.p;S.unlocked.push(x.id);save();jingle();renderShop();renderOpts();updBtns()};d.appendChild(b);L.appendChild(d)});
+L.insertAdjacentHTML('beforeend','<h3>Uppgraderingar</h3>');UPG.forEach(u=>{const l=S.upg[u.id],c=u.cost(l);const d=document.createElement('div');d.className='shopitem';d.innerHTML=`<span style="text-align:left"><b>${u.n}</b> (${l}/${u.max})<br><small>${u.d}</small></span>`;const b=document.createElement('button');b.className='btn ok';b.textContent=l>=u.max?'MAX':c+' kr';b.disabled=l>=u.max||S.money<c;b.onclick=()=>{S.money-=c;S.upg[u.id]++;save();jingle();renderShop();updBtns()};d.appendChild(b);L.appendChild(d)})}
+$('shopBtn').onclick=()=>{renderShop();$('shop').classList.remove('hidden')};$('closeShop').onclick=()=>$('shop').classList.add('hidden');
+$('muteBtn').onclick=()=>{S.muted=!S.muted;save();updBtns()};
+$('playBtn').onclick=()=>{$('start').classList.add('hidden');beep(660);newCustomer()};
+$('resetBtn').onclick=()=>{if(confirm('Vill du börja om från början?')){localStorage.removeItem(KEY);location.reload()}};
+// drawing
+const cv=$('cv'),g=cv.getContext('2d');
+function circle(x,y,r,c){g.fillStyle=c;g.beginPath();g.arc(x,y,r,0,7);g.fill()}
+function rr(x,y,w,h,r,c){g.fillStyle=c;g.beginPath();g.roundRect?g.roundRect(x,y,w,h,r):g.rect(x,y,w,h);g.fill()}
+function person(x,y,o,t){const bob=Math.sin(t/300)*3;y+=bob;
+rr(x-40,y+40,80,110,30,o.shirt);circle(x,y,48,o.skin);
+g.fillStyle=o.hair;g.beginPath();g.arc(x,y-8,52,Math.PI,0);g.fill();if(o.majken){rr(x-58,y-10,22,90,11,o.hair);rr(x+36,y-10,22,90,11,o.hair);
+// chef hat
+rr(x-38,y-80,76,30,8,'#fff');circle(x-22,y-82,22,'#fff');circle(x+4,y-90,26,'#fff');circle(x+26,y-80,20,'#fff');
+rr(x-30,y+60,60,80,10,'#fff');g.fillStyle='#ff8fb1';g.font='bold 22px sans-serif';g.textAlign='center';g.fillText('♥',x,y+100)}
+const blink=(t%3000)<120;g.fillStyle='#333';if(blink){g.fillRect(x-22,y-2,12,3);g.fillRect(x+10,y-2,12,3)}else{circle(x-16,y,6,'#333');circle(x+16,y,6,'#333');circle(x-14,y-2,2,'#fff');circle(x+18,y-2,2,'#fff')}
+circle(x-28,y+16,8,'#ff9fb066');circle(x+28,y+16,8,'#ff9fb066');g.strokeStyle='#833';g.lineWidth=3;g.beginPath();g.arc(x,y+14,14,.2,Math.PI-.2);g.stroke()}
+function pastry(x,y,s,dg,fl,tp,res){const dc=res==='bränd'?'#3b2316':res==='rå'?'#fff3c9':dg.c;
+g.save();g.translate(x,y);g.scale(s,s);rr(-50,-10,100,40,18,dc);if(fl){rr(-42,-18,84,14,7,fl.c)}rr(-46,-34,92,24,14,dc);
+if(tp){if(tp.id==='grädde'){circle(-20,-38,12,tp.c);circle(0,-44,14,tp.c);circle(20,-38,12,tp.c)}else if(tp.id==='marsipan'){rr(-44,-42,88,12,6,tp.c)}else{for(let i=0;i<14;i++){const cc=tp.id==='strossel'?['#ff7ac2','#7ad7ff','#ffe066','#8be09b'][i%4]:'#fff';g.fillStyle=cc;g.fillRect(-38+i*5.6,-38+(i*7%9),4,4)}}}
+g.restore()}
+function draw(t){const W=cv.width,H=cv.height;
+// wall
+g.fillStyle='#ffe8f0';g.fillRect(0,0,W,H);for(let i=0;i<W;i+=40){g.fillStyle=i/40%2?'#ffd9e6':'#ffe8f0';g.fillRect(i,0,20,H*.62)}
+// window
+rr(380,40,200,140,14,'#bfe7ff');g.fillStyle='#fff';g.fillRect(476,40,8,140);g.fillRect(380,106,200,8);circle(420+Math.sin(t/4000)*20,80,16,'#fff9');
+g.fillStyle='#5a3a2e';g.font='bold 34px Trebuchet MS';g.textAlign='center';g.fillText('Majkens Bageri',W/2,30+Math.sin(t/700)*2);
+// decor
+const dk=S.upg.dekor;if(dk>=1)for(let i=0;i<5;i++){circle(400+i*40,190,10,['#ff7ac2','#ffd166','#7ad7ff','#9fe07a','#c39bff'][i])}
+if(dk>=2)for(let i=0;i<8;i++){g.strokeStyle='#5a3a2e';g.lineWidth=1;g.beginPath();g.moveTo(80+i*110,0);g.lineTo(80+i*110,30);g.stroke();circle(80+i*110,36,10,`hsl(${(t/20+i*45)%360},90%,70%)`)}
+if(dk>=3){rr(640,60,90,110,8,'#c99a6b');rr(650,70,70,90,4,'#ffefc9');circle(685,110,20,'#ff8fb1')}
+// floor & counter
+g.fillStyle='#c99a6b';g.fillRect(0,H*.62,W,H);rr(0,H*.72,W,H*.3,0,'#f4a6c0');rr(0,H*.70,W,18,0,'#fff');
+// oven
+rr(30,120,170,170,16,'#9aa3b5');rr(48,150,134,100,10,bake.state==='baking'?`hsl(25,100%,${45+Math.sin(t/120)*8}%)`:'#3b3f4c');g.fillStyle='#fff';g.font='18px sans-serif';g.fillText('UGN'+(S.upg.ugn?' ★'.repeat(S.upg.ugn):''),115,142);
+// majken
+person(290,180,{skin:'#ffd9c0',hair:'#8b4a2b',shirt:'#ff8fb1',majken:1},t);
+// customer
+if(cust){cust.x+=((cust.leaving?1.3:0.78)-cust.x)*.05;person(cust.x*W,190,cust,t+500);
+if(!cust.leaving){const pr=Math.max(0,patience);rr(cust.x*W-50,90,100,12,6,'#fff');rr(cust.x*W-50,90,100*pr,12,6,pr>.5?'#6fd18a':pr>.25?'#ffd166':'#ff6b6b')}}
+// pastry on counter
+const D=find(DOUGH,sel.d),F=find(FILL,sel.f),T=find(TOP,sel.t);if(D)pastry(W*.5,H*.78,1.1,D,F,T,bake.state==='done'?bake.result:null);
+if(bake.state==='done'&&bake.result==='perfekt')for(let i=0;i<6;i++){circle(W*.5+Math.cos(t/300+i)*80,H*.72+Math.sin(t/300+i)*30,4,'#ffe066')}}
+let last=performance.now();
+function loop(t){const dt=(t-last)/1000;last=t;
+if(bake.state==='baking'){bake.pos+=dt*(28+S.upg.ugn*6);if(bake.pos>=100){bake.pos=100;bake.result='bränd';bake.state='done';toast('Oj, bränd! 🔥');beep(200,.3,'square',.05);renderOpts();updBtns()}}
+$('needle').style.left=`calc(${bake.pos}% - 3px)`;
+if(cust&&!cust.leaving){patience-=dt/(40+S.upg.tal*15)}
+draw(t);requestAnimationFrame(loop)}
+updBtns();renderOpts();requestAnimationFrame(loop);
+</script></body></html>
