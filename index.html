@@ -67,7 +67,7 @@ let AC=null;function beep(f,d=.12,type='sine',v=.15){if(S.muted)return;try{AC=AC
 const jingle=()=>[523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,.15,'triangle'),i*90));
 function toast(t){const e=$('toast');e.textContent=t;e.style.opacity=1;clearTimeout(toast.h);toast.h=setTimeout(()=>e.style.opacity=0,1800)}
 const avail=a=>a.filter(x=>S.unlocked.includes(x.id));
-function renderOpts(){[['dough',DOUGH,'d'],['filling',FILL,'f'],['topping',TOP,'t']].forEach(([el,list,k])=>{const c=$(el);c.innerHTML='';avail(list).forEach(x=>{const b=document.createElement('button');b.className='opt'+(sel[k]===x.id?' sel':'');b.textContent=x.n;b.disabled=bake.state!=='idle';b.onclick=()=>{sel[k]=x.id;beep(660,.06);renderOpts()};c.appendChild(b)})})}
+function renderOpts(){[['dough',DOUGH,'d'],['filling',FILL,'f'],['topping',TOP,'t']].forEach(([el,list,k])=>{const c=$(el);c.innerHTML='';avail(list).forEach(x=>{const b=document.createElement('button');b.className='opt'+(sel[k]===x.id?' sel':'');b.textContent=x.n;b.disabled=bake.state!=='idle';b.onclick=()=>{sel[k]=x.id;beep(660,.06);renderOpts();updBtns()};c.appendChild(b)})})}
 const find=(l,id)=>l.find(x=>x.id===id);
 const NAMES=['Elsa','Omar','Farmor Greta','Leo','Saga','Ali','Moa','Viktor','Nora','Hugo'];
 function newCustomer(){const r=a=>a[Math.random()*a.length|0];order={d:r(avail(DOUGH)).id,f:r(avail(FILL)).id,t:r(avail(TOP)).id};
